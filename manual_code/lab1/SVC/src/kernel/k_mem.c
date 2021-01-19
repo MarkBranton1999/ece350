@@ -66,6 +66,7 @@ void* k_mem_alloc(size_t size) {
     return NULL;
 }
 
+//DE-ALLOC
 int k_mem_dealloc(void *ptr) {
 #ifdef DEBUG_0
     printf("k_mem_dealloc: freeing 0x%x\r\n", (U32) ptr);
