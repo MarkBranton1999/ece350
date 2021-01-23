@@ -105,35 +105,29 @@ int k_mem_dealloc(void *ptr) {
 	}
 
 	//get the size of this block to be deleted
-	//unsigned int given_address = (U32) ptr;
-	unsigned int given_address = 12345;
-	unsigned int given_address_block_size = given_address - (U32) SIZE_T_BYTES;
+	//unsigned int given_address = (U32) ptr;	// actual line
+	unsigned int given_address = 12345;			// dummy example
+	unsigned int given_address_block_size = (U32)given_address - SIZE_T_BYTES;
 
 	//set up node to be inserted into the list of free blocks
-	struct mem_node *deallocated_space;
+	struct mem_node *deallocated_space = NULL;
 	deallocated_space = (struct mem_node *)given_address;		// Assign head to start of Free Memory Space
-	deallocated_space->size = given_address_block_size;	// Size should be size of Free Memory Space
+	deallocated_space->size = 0;
 	deallocated_space->next_node = NULL;
 
 	//variables
 	struct mem_node *prev_address = NULL;
 	struct mem_node *next_address = NULL;
-	struct mem_node *current_pointer;
+	struct mem_node *current_pointer = NULL;
 
 	//traverse and find where this allocated block is located...
     current_pointer = head;
-
-    printf("Address: %x\t",(U32)&current_pointer);
-
-
-
-
+    printf("Addresssss: %x\t",(U32)&current_pointer);
     while(current_pointer != NULL)
     {
     	//Error condition - if we found node in free list for this address, DANGER - DEALLOCATING FREE SPACE
     	if ((U32)&current_pointer == given_address) {
-    			break;
-    			return NULL;
+    			return NULL;	//???????
     	}
 
     	//check location
@@ -147,38 +141,44 @@ int k_mem_dealloc(void *ptr) {
     	current_pointer = current_pointer->next_node;
     }
 
-    //get the sizes of adjacent blocks to check against
-    unsigned int prev_free_size = prev_address->size;
-    unsigned int next_free_size = next_address->size;
+    //if we did not set the previous and next free space, this means we could not find the node to be deallocated. return null
+    if (!prev_address && !next_address) {
+    	return NULL;
+    }
 
     //insert the deallocated block node in list
     prev_address->next_node = deallocated_space;
     deallocated_space->next_node = next_address;
 
-    unsigned int check = 0;
 
-    //check if prev_address is free
-    if ((U32)&prev_address + prev_free_size == (U32)given_address) {
-    	prev_address->size = prev_address->size + deallocated_space->size;
-    	prev_address->next_node = next_address;
-    	check++;
-    }
+    //first check if both spaces around is empty
+	if (((U32)&prev_address + prev_address->size == (U32)given_address) &&
+			((U32)given_address + given_address_block_size == (U32)&next_address)) {
 
-    //check if next_address is free
-	if ((U32)given_address + given_address_block_size == (U32)&next_address) {
-		next_address->size = next_address->size + deallocated_space->size;
-		prev_address->next_node = next_address;
-		check++;
-	}
-
-	//if both sides of deallocated block are free space, merge both
-	if (check == 2) {
 		prev_address->next_node = next_address->next_node;
-		prev_address->size = prev_address->size + next_address->size - deallocated_space->size;
-		//delete next_address;
-	}
+		prev_address->size = prev_address->size + next_address->size;
+		deallocated_space->next_node = NULL;
+		next_address->next_node = NULL;
 
-	//delete deallocated_space node;
+		//delete next_address(); - ?
+		//delete deallocated_space(); - ?
+
+	} else {
+
+		//check if prev_address is free
+		if ((U32)&prev_address + prev_address->size == (U32)given_address) {
+			prev_address->size = prev_address->size + deallocated_space->size;
+			prev_address->next_node = next_address;
+			//delete deallocated_space(); - ?
+		}
+
+		//check if next_address is free
+		if ((U32)given_address + given_address_block_size == (U32)&next_address) {
+			next_address->size = next_address->size + deallocated_space->size;
+			prev_address->next_node = next_address;
+			//delete deallocated_space(); - ?
+		}
+	}
 
 
     printf("current_pointer: %x\n", (current_pointer->size));
