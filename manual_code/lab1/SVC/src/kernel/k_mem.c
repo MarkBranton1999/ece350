@@ -88,6 +88,11 @@ int k_mem_init(void) {
 void* k_mem_alloc(size_t size) {
     if (size == 0)
     	return NULL;
+    struct mem_node *current = head;
+    struct mem_node *prev = NULL;
+	#ifdef DEBUG_0
+		printf("mem_alloc: head: 0x%x, current: 0x%x, prev: 0x%x\r\n", head, current, prev);
+	#endif /* DEBUG_0 */
 
     //byte aligned actual size you're looking for
 	unsigned int actual_size = (unsigned int)((size + SIZE_T_BYTES + 3) & ~0x03);
@@ -99,78 +104,69 @@ void* k_mem_alloc(size_t size) {
 		printf("mem_alloc: given size: %d, actual_size: %d\r\n", size, actual_size);
 	#endif /* DEBUG_0 */
 
-    unsigned int currentAddress = (unsigned int) head;
-    unsigned int prevAddress = 0;
-
-	#ifdef DEBUG_0
-			printf("mem_alloc: head address: 0x%x, head size: %d, head next node: 0x%x\r\n", currentAddress, ((struct mem_node *)currentAddress)->size, ((struct mem_node *)currentAddress)->next_node);
-	#endif /* DEBUG_0 */
-
     //loop through all the free nodes
-    while((struct mem_node *)currentAddress != NULL) {
+    while(current != NULL) {
 
     	//free node found code BEGIN
-    	if (((struct mem_node *)currentAddress)->size >= actual_size) {
+    	if (current->size >= actual_size) {
 
     		//let's keep track of the address we want to return
-    		unsigned int returnAddress = currentAddress + SIZE_T_BYTES;
+    		unsigned int returnAddress = (unsigned int)current + SIZE_T_BYTES;
 
 			#ifdef DEBUG_0
 				printf("mem_alloc: return address: 0x%x\r\n", returnAddress);
 			#endif /* DEBUG_0 */
 
     		//if the free chunk's size is exactly the size we're looking for
-    		if (((struct mem_node *)currentAddress)->size == actual_size) {
+    		if (current->size == actual_size) {
 
     			//if prevAddress exists, i.e., it's not the first node on the linked list
-    			if (prevAddress) {
-    				((struct mem_node *)prevAddress)->next_node = ((struct mem_node *)currentAddress)->next_node;
+    			if (prev) {
+    				prev->next_node = current->next_node;
     			}
     			//it is the first node on the linked list. In this case, just push head up so it points to NULL
     			else {
-    				currentAddress += actual_size;
-    				head = (struct mem_node *)currentAddress;
+    				//doing current += actual_size; head = current; increments wayyy beyond actual_size on printf
+    				head = (struct mem_node *)((unsigned int)current + actual_size);
+					#ifdef DEBUG_0
+						printf("mem_alloc: current: 0x%x, head: 0x%x\r\n", current, head);
+					#endif /* DEBUG_0 */
     			}
 				#ifdef DEBUG_0
-					printf("mem_alloc: I shouldn't be here\r\n");
+					printf("mem_alloc: actual size exactly equal to available size\r\n");
 				#endif /* DEBUG_0 */
     		}
 
     		//if the free chunk's size is greater than the size we're looking for
-    		else if (((struct mem_node *)currentAddress)->size > actual_size) {
+    		else if (current->size > actual_size) {
 
     			//let's keep track of the new size using the size we've set earlier
-    			int newSize = ((struct mem_node *)currentAddress)->size - actual_size;
+    			int newSize = current->size - actual_size;
     			//let's keep track of the next node's address
-    			unsigned int nextNodeAddress = (unsigned int)((struct mem_node *)currentAddress)->next_node;
+    			struct mem_node *new_next_node = current->next_node;
     			//now let's increment the address to uninitialized territory
-    			currentAddress += actual_size;
+    			//doing current += actual_size; increments wayyy beyond actual_size on printf
+    			current = (struct mem_node*)((unsigned int)current + actual_size);
+
 				#ifdef DEBUG_0
-						printf("mem_alloc: modified address: 0x%x, modified size: %d, constant next node: 0x%x\r\n", currentAddress, newSize, nextNodeAddress);
+					printf("mem_alloc: current: 0x%x, size: %d, new_next_node: 0x%x\r\n", current, newSize, new_next_node);
 				#endif /* DEBUG_0 */
 
     			//now let's set the values in that uninitialized territory
-    			((struct mem_node *)currentAddress)->size = newSize;
-    			((struct mem_node *)currentAddress)->next_node = (struct mem_node*)nextNodeAddress;
-
-				#ifdef DEBUG_0
-						printf("mem_alloc: current address: 0x%x, current size: %d, current next node: 0x%x\r\n", currentAddress, ((struct mem_node *)currentAddress)->size, ((struct mem_node *)currentAddress)->next_node);
-				#endif /* DEBUG_0 */
+    			current->size = newSize;
+    			current->next_node = new_next_node;
 
     			//if not first free node, let's make sure prevAddress's next_node points to the right location
-    			if (prevAddress) {
-    				((struct mem_node *)prevAddress)->next_node += actual_size;
-					#ifdef DEBUG_0
-							printf("mem_alloc: prev address: 0x%x, prev size: %d, prev next node: 0x%x\r\n", prevAddress, ((struct mem_node *)prevAddress)->size, ((struct mem_node *)prevAddress)->next_node);
-					#endif /* DEBUG_0 */
+    			if (prev) {
+    				prev->next_node += actual_size;
     			}
     			//if first node, move it by the right amount so it's looking at the modified current address
     			else
-    				head = (struct mem_node *)currentAddress;
+    				head = current;
     		}
 
 			#ifdef DEBUG_0
-					printf("mem_alloc: return address shouldn't have changed: 0x%x\r\n", returnAddress);
+				printf("mem_alloc: return address shouldn't have changed: 0x%x\r\n", returnAddress);
 			#endif /* DEBUG_0 */
 
     		//return the initial currentAddress + SIZE_T_BYTES
@@ -181,12 +177,8 @@ void* k_mem_alloc(size_t size) {
 		#ifdef DEBUG_0
 				printf("mem_alloc: the search continues...\r\n");
 		#endif /* DEBUG_0 */
-    	//moving to the next free node
-    	prevAddress = currentAddress;
-    	currentAddress += (unsigned int)((struct mem_node *)currentAddress)->next_node;
-		#ifdef DEBUG_0
-				printf("mem_alloc: next step prev: 0x%x, next step current: 0x%x\r\n", prevAddress, currentAddress);
-		#endif /* DEBUG_0 */
+		prev = current;
+		current = current->next_node;
     }
 
     return NULL;
