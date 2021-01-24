@@ -97,101 +97,174 @@ void* k_mem_alloc(size_t size) {
 // MEM_DEALLOC
 int k_mem_dealloc(void *ptr) {
 
-#ifdef DEBUG_0
-
 	//check if address input is NULL
-	if (!ptr) {
-			return NULL;
+	if (!(U32)ptr) {
+		#ifdef DEBUG_0
+		printf("No input given - ERROR\r\n");
+		#endif /* DEBUG_0 */
+		return RTX_ERR;
 	}
 
-	//get the size of this block to be deleted
-	//unsigned int given_address = (U32) ptr;	// actual line
-	unsigned int given_address = 12345;			// dummy example
-	unsigned int given_address_block_size = (U32)given_address - SIZE_T_BYTES;
+	// get address
+	unsigned int given_address = (unsigned int) ptr - (unsigned int)SIZE_T_BYTES;			// actual line
+    if (given_address < (unsigned int)&Image$$ZI_DATA$$ZI$$Limit || given_address >= END_OF_FREE_MEM) {
+	#ifdef DEBUG_0
+	printf("Address out of bounds - ERROR\r\n");
+	#endif /* DEBUG_0 */
+		return RTX_ERR;
+    }
 
-	//set up node to be inserted into the list of free blocks
-	struct mem_node *deallocated_space = NULL;
-	deallocated_space = (struct mem_node *)given_address;		// Assign head to start of Free Memory Space
-	deallocated_space->size = 0;
-	deallocated_space->next_node = NULL;
+	// ????????????????????????????????????????????????????????
+	//get the size of this block to be deleted - THIS IS STILL A QUESTION AS ALLOCATED SIZE NOT STORED IN MEMORY
+    //char* given_address_block_size = (char *)((U32)given_address - SIZE_T_BYTES);
+    //char* pointer = (char*)0x80302a6c;
+    //char value = *pointer;
+	char given_address_block_size = 12;
 
 	//variables
 	struct mem_node *prev_address = NULL;
 	struct mem_node *next_address = NULL;
-	struct mem_node *current_pointer = NULL;
+
+	//set up node to be inserted into the list of free blocks
+	struct mem_node *deallocated_space = NULL;
+	deallocated_space = (struct mem_node *)(given_address);		// Assign head to start of Free Memory Space
+	deallocated_space->size = given_address_block_size;
+	deallocated_space->next_node = NULL;
+
+	#ifdef DEBUG_0
+	printf("Deallocated location: 0x%x\r\n", given_address);
+	#endif /* DEBUG_0 */
+
+
+	// Before traversing the free list, there could be an allocated node right before free list!
+	if ((U32)given_address < (U32)head) {
+
+		#ifdef DEBUG_0
+		printf("Yes it's before head...\r\n");
+		#endif /* DEBUG_0 */
+
+		deallocated_space->next_node = head;
+	    head->size = head->size + deallocated_space->size;
+		head = deallocated_space;
+
+		#ifdef DEBUG_0
+		printf("Relocated head to: 0x%x\r\n", head);
+		printf(" ........................................................................................\r\n");
+		#endif /* DEBUG_0 */
+
+		return RTX_OK;
+	}
+
+	struct mem_node *current_pointer = (struct mem_node *)((unsigned int) head);
+
+	#ifdef DEBUG_0
+	printf("Starting Current Pointer: 0x%x\r\n", current_pointer);
+	#endif /* DEBUG_0 */
 
 	//traverse and find where this allocated block is located...
-    current_pointer = head;
-    printf("Addresssss: %x\t",(U32)&current_pointer);
     while(current_pointer != NULL)
     {
-    	//Error condition - if we found node in free list for this address, DANGER - DEALLOCATING FREE SPACE
-    	if ((U32)&current_pointer == given_address) {
-    			return NULL;	//???????
+    	//Error condition - if we found node in free list AREA for this address, DANGER - DEALLOCATING FREE SPACE
+    	if (given_address == (U32)current_pointer) {
+
+			#ifdef DEBUG_0
+			printf("Address is a node on free list! - ERROR\r\n");
+			#endif /* DEBUG_0 */
+
+    			return RTX_ERR;
     	}
 
-    	//check location
-    	if ((U32)&(current_pointer->next_node) > given_address) {
+    	if (given_address < (U32)(current_pointer) + current_pointer->size) {
 
-    		//track the adjacent free space around this allocated node
-    		prev_address = current_pointer;
-    		next_address = current_pointer->next_node;
+			#ifdef DEBUG_0
+    		printf("Address is in the free space! - ERROR\r\n");
+			#endif /* DEBUG_0 */
+
+				return RTX_ERR;
+		}
+
+    	//check location and track the adjacent free space around this allocated node
+    	if ((U32)(current_pointer->next_node) > given_address) {
+
+			#ifdef DEBUG_0
+			printf("Found possible location of node!\r\n");
+			#endif /* DEBUG_0 */
+
+    		prev_address = (struct mem_node *)((unsigned int)current_pointer);
+    		next_address = (struct mem_node *)((unsigned int)current_pointer->next_node);
     		break;
     	}
     	current_pointer = current_pointer->next_node;
     }
 
+	#ifdef DEBUG_0
+	printf("Previous Address: 0x%x\r\n", prev_address);
+	printf("Next Address: 0x%x\r\n", next_address);
+	#endif /* DEBUG_0 */
+
     //if we did not set the previous and next free space, this means we could not find the node to be deallocated. return null
     if (!prev_address && !next_address) {
-    	return NULL;
+		#ifdef DEBUG_0
+		printf("No address located on memory - ERROR\r\n");
+		#endif
+    	return RTX_ERR;
     }
 
     //insert the deallocated block node in list
-    prev_address->next_node = deallocated_space;
-    deallocated_space->next_node = next_address;
-
+    prev_address->next_node = (struct mem_node *)((unsigned int)deallocated_space);
+    deallocated_space->next_node = (struct mem_node *)((unsigned int)next_address);
 
     //first check if both spaces around is empty
-	if (((U32)&prev_address + prev_address->size == (U32)given_address) &&
-			((U32)given_address + given_address_block_size == (U32)&next_address)) {
+
+	if (((U32)prev_address + (U32)prev_address->size == (U32)given_address) &&
+			((U32)given_address + (U32)given_address_block_size == (U32)next_address)) {
+
+		#ifdef DEBUG_0
+		printf("Left and Right of node are free\r\n");
+		#endif /* DEBUG_0 */
 
 		prev_address->next_node = next_address->next_node;
 		prev_address->size = prev_address->size + next_address->size;
 		deallocated_space->next_node = NULL;
 		next_address->next_node = NULL;
 
-		//delete next_address(); - ?
-		//delete deallocated_space(); - ?
+		return RTX_OK;
 
 	} else {
-
 		//check if prev_address is free
-		if ((U32)&prev_address + prev_address->size == (U32)given_address) {
+		if ((U32)prev_address + (U32)prev_address->size  == (U32)given_address) {
+			#ifdef DEBUG_0
+			printf("Left side is free!\r\n");
+			#endif /* DEBUG_0 */
+
 			prev_address->size = prev_address->size + deallocated_space->size;
 			prev_address->next_node = next_address;
-			//delete deallocated_space(); - ?
+			deallocated_space->next_node = NULL;
+
+			return RTX_OK;
 		}
 
 		//check if next_address is free
-		if ((U32)given_address + given_address_block_size == (U32)&next_address) {
+		if ((U32)given_address + (U32)given_address_block_size == (U32)next_address) {
+
+			#ifdef DEBUG_0
+			printf("Right side is free!\r\n");
+			#endif /* DEBUG_0 */
+
 			next_address->size = next_address->size + deallocated_space->size;
 			prev_address->next_node = next_address;
-			//delete deallocated_space(); - ?
+			deallocated_space->next_node = NULL;
+
+			return RTX_OK;
 		}
 	}
 
-
-    printf("current_pointer: %x\n", (current_pointer->size));
-
-    printf("Before: 0x%x\r\n", (U32)(current_pointer->size));
-    printf("Result: 0x%x\r\n", (U32)(current_pointer->size) + (U32) SIZE_T_BYTES);
-
-    printf("k_mem_dealloc: freeing 0x%x\r\n", (U32) ptr);
+	#ifdef DEBUG_0
+	printf(" ........................................................................................\r\n");
+	#endif /* DEBUG_0 */
 
 
-#endif /* DEBUG_0 */
-
-    return RTX_OK;
+    return RTX_ERR;
 }
 
 
