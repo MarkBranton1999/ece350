@@ -321,7 +321,7 @@ int k_mem_dealloc(void *ptr) {
 		#endif /* DEBUG_0 */
 
 		prev_address->next_node = next_address->next_node;
-		prev_address->size = prev_address->size + next_address->size;
+		prev_address->size = prev_address->size + next_address->size + deallocated_space->size;
 		deallocated_space->next_node = NULL;
 		next_address->next_node = NULL;
 
