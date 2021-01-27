@@ -370,7 +370,16 @@ int k_mem_count_extfrag(size_t size) {
 #ifdef DEBUG_0
     printf("k_mem_extfrag: size = %d\r\n", size);
 #endif /* DEBUG_0 */
-    return RTX_OK;
+    struct mem_node *start = head;
+    int frags = 0;
+    
+    while(start != NULL) {
+	if(start->size < size) {
+		frags++;
+	}
+	start = start->next_node;    
+    }
+    return frags;
 }
 
 /*
