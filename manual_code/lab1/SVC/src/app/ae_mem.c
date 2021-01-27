@@ -25,35 +25,60 @@
 #include "printf.h"
 
 int test_mem(void) {
-    void *p[4];
-    int n;
 
-    U32 result = 0;
+	//VARIABLES
+	void *p[5];
+	int n;
+	U32 result = 0;
 
-    p[0] = mem_alloc(8);
+	//CASE 1: MEM_INIT() INITIALISES THE FREE BLOCK
+	n = mem_count_extfrag(1070585250 );
+	if (n == 1) {
+		result |= BIT(0);
+	}
 
-    if (p[0] != NULL) {
-        result |= BIT(0);
-    }
+	//CASE 2: ALLOC AND DE_ALLOC SAME NUMBER OF TIMES
+	p[0] = mem_alloc(25);
+	p[1] = mem_alloc(25);
+	mem_dealloc(p[1]);
+	p[3] = mem_alloc(25);
+	mem_dealloc(p[3]);
+	p[2] = mem_alloc(25);
+	mem_dealloc(p[2]);
+	mem_dealloc(p[0]);
+	p[4] = mem_alloc(25);
+	mem_dealloc(p[4]);
+	n = mem_count_extfrag(1070585250);
 
-    p[1] = mem_alloc(8);
+	if (n == 1) {
+		result |= BIT(1);
+	}
 
-    if (p[1] != NULL && p[1] != p[0]) {
-        result |= BIT(1);
-    }
+	//CASE 3: DEALLOCATING SAME ADDRESS SHOULD GIVE ERROR
+	p[0] = mem_alloc(20);
+	p[1] = mem_alloc(20);
+	mem_dealloc(p[1]);
+	mem_dealloc(p[1]);
 
-    mem_dealloc(p[0]);
-    n = mem_count_extfrag(128);
-    if (n == 1) {
-        result |= BIT(2);
-    }
+	if (mem_dealloc(p[1]) == RTX_ERR) {
+		result |= BIT(2);
+	}
+	mem_dealloc(p[0]);
 
-    mem_dealloc(p[1]);
-    n = mem_count_extfrag(128);
-    if (n == 0) {
-        result |= BIT(3);
-    }
-    return result;
+	//CASE 4: REUSING NEWLY FREE REGION TO ASSIGN A BLOCK
+	printf("----------------------------------------\r\n");
+	p[0] = mem_alloc(8);
+	p[1] = mem_alloc(20);
+	mem_dealloc(p[0]);
+	p[2] = mem_alloc(20);
+
+	n = mem_count_extfrag(1070585250);
+	printf("CASE 4: %d\r\n", n);
+	if (n == 2) {
+		result |= BIT(3);
+	}
+
+	return result;
 }
 /*
  *===========================================================================

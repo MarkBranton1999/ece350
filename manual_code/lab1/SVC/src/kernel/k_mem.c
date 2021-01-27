@@ -99,6 +99,7 @@ void* k_mem_alloc(size_t size) {
     unsigned int found = 0;
 	#ifdef DEBUG_0
 		printf("mem_alloc: head: 0x%x, current: 0x%x, prev: 0x%x\r\n", head, current, prev);
+		printf(" ........................................................................................\r\n");
 	#endif /* DEBUG_0 */
 
     //byte aligned actual size you're looking for (with SIZE_T_BYTES available for storing the space)
@@ -180,7 +181,7 @@ void* k_mem_alloc(size_t size) {
 	}
 
 	// Overwrite the SIZE_T_BYTES at the start of current
-	*allocated_size = size + SIZE_T_BYTES;
+	*allocated_size = actual_size;
 	#ifdef DEBUG_0
 		printf("mem_alloc: allocated_size_address: 0x%x, allocated_size_value: %d\r\n", (unsigned int)allocated_size, *allocated_size);
 	#endif /* DEBUG_0 */
@@ -191,6 +192,7 @@ void* k_mem_alloc(size_t size) {
 	#ifdef DEBUG_0
 		printf("mem_alloc: return address shouldn't have changed: 0x%x\r\n", returnAddress);
 		printf("k_mem_alloc: requested memory size = %d\r\n", size);
+		printf(" ........................................................................................\r\n");
 	#endif /* DEBUG_0 */
 
     //return the initial currentAddress + SIZE_T_BYTES
@@ -225,7 +227,10 @@ int k_mem_dealloc(void *ptr) {
 	deallocated_space->next_node = NULL;
 
 	#ifdef DEBUG_0
+		printf(" ........................................................................................\r\n");
 		printf("Deallocated location: 0x%x\r\n", size_address);
+		printf("Deallocated SIZE: %d\r\n", deallocated_space->size);
+		printf("Starting head: 0x%x\r\n", (unsigned int)head);
 	#endif /* DEBUG_0 */
 
 	// Check if head comes after the space being deallocated
@@ -291,27 +296,45 @@ int k_mem_dealloc(void *ptr) {
     }
 
     // Now we have current_address holding the address of the node after our deallocated
-    // and prev_address has the address of the node before
+    // TAKE CARE OF MERGING
+	if (((unsigned int)prev_address + prev_address->size == (unsigned int)size_address) &&
+			((unsigned int)size_address + deallocated_space->size == (unsigned int)current_address)) {
 
-    // We first check whether a merge is necessary
-    if((unsigned int)size_address + deallocated_space->size == (unsigned int)current_address) {
 		#ifdef DEBUG_0
-    		printf("Merge is necessary\r\n", prev_address);
+		printf("Left and Right of node are free\r\n");
 		#endif /* DEBUG_0 */
-    	// Merge is necessary
-    	deallocated_space->next_node = current_address->next_node;
-    	deallocated_space->size += current_address->size;
-    	prev_address->next_node = deallocated_space;
 
-    	// Now check merge with previous node
-    	if((unsigned int)prev_address + prev_address->size == (unsigned int)prev_address->next_node) {
-    		prev_address->size += prev_address->next_node->size;
-    		prev_address->next_node = prev_address->next_node->next_node;
-    	}
-    } else {
-    	deallocated_space->next_node = current_address;
-    	prev_address->next_node = deallocated_space;
-    }
+		prev_address->next_node = current_address->next_node;
+		prev_address->size = prev_address->size + current_address->size + deallocated_space->size;
+		deallocated_space->next_node = NULL;
+		current_address->next_node = NULL;
+
+	} else if ((unsigned int)prev_address + (unsigned int)prev_address->size  == (unsigned int)size_address) {
+
+		//LEFT SIDE OF DEALLOCATED IS FREE
+		#ifdef DEBUG_0
+		printf("Left side is free!\r\n");
+		#endif /* DEBUG_0 */
+
+		prev_address->size = prev_address->size + deallocated_space->size;
+		prev_address->next_node = current_address;
+		deallocated_space->next_node = NULL;
+
+	} else if ((unsigned int)size_address + deallocated_space->size == (unsigned int)current_address) {
+
+		//RIGHT SIDE OF ALLOCATED IS FREE
+		#ifdef DEBUG_0
+		printf("Right side is free!\r\n");
+		#endif /* DEBUG_0 */
+
+		current_address->size = current_address->size + deallocated_space->size;
+		prev_address->next_node = current_address;
+		deallocated_space->next_node = NULL;
+
+	} else {
+	    deallocated_space->next_node = current_address;
+	    prev_address->next_node = deallocated_space;
+	}
 
 	#ifdef DEBUG_0
 		printf("Head Address: 0x%x\r\n", head);
@@ -334,7 +357,7 @@ int k_mem_count_extfrag(size_t size) {
 	#endif /* DEBUG_0 */
     struct mem_node *start = head;
     int frags = 0;
-    
+
     while(start != NULL) {
     	if(start->size < size) {
     		frags++;
