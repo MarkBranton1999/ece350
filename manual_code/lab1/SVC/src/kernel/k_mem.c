@@ -15,7 +15,7 @@
  * @brief       Kernel Memory Management API C Code
  *
  * @version     V1.2021.01
- * @authors     Yiqing Huang
+ * @authors     Yiqing Huang, Shivansh Vij, Mark Branton, Aarti Vasudevan, Aishwarya Raju
  * @date        2021 JAN
  *
  * @note        skeleton code
@@ -52,6 +52,9 @@ struct mem_node {
 
 
 struct mem_node *head __attribute__((aligned(8)));
+unsigned int end_addr __attribute__((aligned(8)));
+unsigned int max_size __attribute__((aligned(8)));
+
 /*
  *===========================================================================
  *                            MACROS
@@ -67,7 +70,7 @@ struct mem_node *head __attribute__((aligned(8)));
 
 // MEM_INIT
 int k_mem_init(void) {
-    unsigned int end_addr = (unsigned int) &Image$$ZI_DATA$$ZI$$Limit;
+    end_addr = (unsigned int) &Image$$ZI_DATA$$ZI$$Limit;
     if(end_addr >= END_OF_FREE_MEM){
     	return -1;
     }
@@ -75,7 +78,8 @@ int k_mem_init(void) {
     if(sizeof(head) >= END_OF_FREE_MEM - end_addr){
     	return -1;
     }
-    head->size = END_OF_FREE_MEM - end_addr - SIZE_T_BYTES;	// Size should be size of Free Memory Space
+    max_size = END_OF_FREE_MEM - end_addr - SIZE_T_BYTES;
+    head->size = max_size;	// Size should be size of Free Memory Space
     head->next_node = NULL;						// Initialize next_node to NULL
 #ifdef DEBUG_0
     printf("k_mem_init: image ends at 0x%x\r\n", end_addr);
@@ -91,15 +95,17 @@ void* k_mem_alloc(size_t size) {
     if (size == 0)
     	return NULL;
     struct mem_node *current = head;
-    struct mem_node *prev = NULL;
+    struct mem_node *prev = head;
+    unsigned int found = 0;
 	#ifdef DEBUG_0
 		printf("mem_alloc: head: 0x%x, current: 0x%x, prev: 0x%x\r\n", head, current, prev);
 	#endif /* DEBUG_0 */
 
-    //byte aligned actual size you're looking for
+    //byte aligned actual size you're looking for (with SIZE_T_BYTES available for storing the space)
 	unsigned int actual_size = (unsigned int)((size + SIZE_T_BYTES + 3) & ~0x03);
+
 	//if this is greater than largest possible size, return null
-    if (actual_size > (END_OF_FREE_MEM - (unsigned int)&Image$$ZI_DATA$$ZI$$Limit) - SIZE_T_BYTES)
+    if (actual_size > max_size)
     	return NULL;
 
 	#ifdef DEBUG_0
@@ -108,86 +114,87 @@ void* k_mem_alloc(size_t size) {
 
     //loop through all the free nodes
     while(current != NULL) {
-
-    	//free node found code BEGIN
+    	//free node found, let's leave the loop
     	if (current->size >= actual_size) {
-
-    		//let's keep track of the address we want to return
-    		unsigned int returnAddress = (unsigned int)current + SIZE_T_BYTES;
-
-			#ifdef DEBUG_0
-				printf("mem_alloc: return address: 0x%x\r\n", returnAddress);
-			#endif /* DEBUG_0 */
-
-    		//if the free chunk's size is exactly the size we're looking for
-    		if (current->size == actual_size) {
-
-    			//if prevAddress exists, i.e., it's not the first node on the linked list
-    			if (prev) {
-    				prev->next_node = current->next_node;
-    			}
-    			//it is the first node on the linked list. In this case, just push head up so it points to NULL
-    			else {
-    				//doing current += actual_size; head = current; increments wayyy beyond actual_size on printf
-    				head = (struct mem_node *)((unsigned int)current + actual_size);
-					#ifdef DEBUG_0
-						printf("mem_alloc: current: 0x%x, head: 0x%x\r\n", current, head);
-					#endif /* DEBUG_0 */
-    			}
-				#ifdef DEBUG_0
-					printf("mem_alloc: actual size exactly equal to available size\r\n");
-				#endif /* DEBUG_0 */
-    		}
-
-    		//if the free chunk's size is greater than the size we're looking for
-    		else if (current->size > actual_size) {
-
-    			//let's keep track of the new size using the size we've set earlier
-    			int newSize = current->size - actual_size;
-    			//let's keep track of the next node's address
-    			struct mem_node *new_next_node = current->next_node;
-    			//now let's increment the address to uninitialized territory
-    			//doing current += actual_size; increments wayyy beyond actual_size on printf
-    			current = (struct mem_node*)((unsigned int)current + actual_size);
-
-				#ifdef DEBUG_0
-					printf("mem_alloc: current: 0x%x, size: %d, new_next_node: 0x%x\r\n", current, newSize, new_next_node);
-				#endif /* DEBUG_0 */
-
-    			//now let's set the values in that uninitialized territory
-    			current->size = newSize;
-    			current->next_node = new_next_node;
-
-    			//if not first free node, let's make sure prevAddress's next_node points to the right location
-    			if (prev) {
-    				prev->next_node += actual_size;
-    			}
-    			//if first node, move it by the right amount so it's looking at the modified current address
-    			else
-    				head = current;
-    		}
-
-			#ifdef DEBUG_0
-				printf("mem_alloc: return address shouldn't have changed: 0x%x\r\n", returnAddress);
-			#endif /* DEBUG_0 */
-
-    		//return the initial currentAddress + SIZE_T_BYTES
-    		return (void *)returnAddress;
+    		found = 1;
+    		break;
     	}
-    	//free node found code END
-
+    	// free node not found, let's next the next block
+    	prev = current;
+    	current = current->next_node;
 		#ifdef DEBUG_0
-				printf("mem_alloc: the search continues...\r\n");
+			printf("mem_alloc: head: 0x%x, current: 0x%x, prev: 0x%x\r\n", head, current, prev);
 		#endif /* DEBUG_0 */
-		prev = current;
-		current = current->next_node;
     }
 
-#ifdef DEBUG_0
-//	k_mem_init();
-    printf("k_mem_alloc: requested memory size = %d\r\n", size);
-#endif /* DEBUG_0 */
-    return NULL;
+    if(!found) // Didn't find anything in while loop, so nothing to allocate
+    	return NULL;
+
+    // Else we have space available
+    //let's keep track of the address we want to return
+    unsigned int returnAddress = (unsigned int)current + SIZE_T_BYTES;
+
+	#ifdef DEBUG_0
+		printf("mem_alloc: return address: 0x%x\r\n", returnAddress);
+		printf("mem_alloc: current_address: 0x%x\r\n", (unsigned int)current);
+	#endif /* DEBUG_0 */
+
+	//Now we memorize the location of the size we're allocating to the current address
+	size_t *allocated_size = (size_t *)current;
+
+	// We need to split the block
+	if (current->size > actual_size) {
+		// Save the values from the current node before we overwrite it
+		unsigned int new_block_size = current->size - actual_size; //actual_size contains SIZE_T_BYTES
+		struct mem_node *new_block_next_node = current->next_node;
+
+		#ifdef DEBUG_0
+			printf("mem_alloc: new_block_next_node: 0x%x, new_block_size: %d\r\n", (unsigned int)new_block_next_node, new_block_size);
+		#endif /* DEBUG_0 */
+
+		// Convert prev to a number, increment it by the size being allocated, and return a pointer to that
+		struct mem_node *new_block = (struct mem_node *)((unsigned int)current + actual_size);
+
+		#ifdef DEBUG_0
+			printf("mem_alloc: new_block_address: 0x%x\r\n", (unsigned int)new_block);
+			printf("mem_alloc: head: 0x%x, prev: 0x%x\r\n", (unsigned int)head, (unsigned int)prev);
+		#endif /* DEBUG_0 */
+
+		// Start overwriting the current node and replacing prev
+		new_block->size = new_block_size;
+		new_block->next_node = new_block_next_node;
+		if ((unsigned int)prev == (unsigned int)head)
+			head = new_block;
+		else
+			prev->next_node = new_block;
+
+		#ifdef DEBUG_0
+			printf("mem_alloc: (EQUAL) head: 0x%x, prev: 0x%x, new_block: 0x%x\r\n", (unsigned int)head, (unsigned int)prev, (unsigned int)new_block);
+		#endif /* DEBUG_0 */
+	} else {
+		// The block can be used whole, no need to split
+		if ((unsigned int)prev == (unsigned int)head)
+			head = current->next_node;
+		else
+			prev->next_node = current->next_node;
+	}
+
+	// Overwrite the SIZE_T_BYTES at the start of current
+	*allocated_size = size + SIZE_T_BYTES;
+	#ifdef DEBUG_0
+		printf("mem_alloc: allocated_size_address: 0x%x, allocated_size_value: %d\r\n", (unsigned int)allocated_size, *allocated_size);
+	#endif /* DEBUG_0 */
+
+	//Now we have a chunk of memory free at returnAddress,
+	// and the SIZE_T_BYTES before it are filled with the size being allocated
+
+	#ifdef DEBUG_0
+		printf("mem_alloc: return address shouldn't have changed: 0x%x\r\n", returnAddress);
+		printf("k_mem_alloc: requested memory size = %d\r\n", size);
+	#endif /* DEBUG_0 */
+
+    //return the initial currentAddress + SIZE_T_BYTES
+    return (void *)returnAddress;
 }
 
 
@@ -195,190 +202,149 @@ void* k_mem_alloc(size_t size) {
 int k_mem_dealloc(void *ptr) {
 
 	//check if address input is NULL
-	if (!(U32)ptr) {
+	if (!(unsigned int)ptr) {
 		#ifdef DEBUG_0
-		printf("No input given - ERROR\r\n");
+			printf("No input given - ERROR\r\n");
 		#endif /* DEBUG_0 */
 		return RTX_ERR;
 	}
 
-	// get address
-	unsigned int given_address = (unsigned int) ptr - (unsigned int)SIZE_T_BYTES;			// actual line
-    if (given_address < (unsigned int)&Image$$ZI_DATA$$ZI$$Limit || given_address >= END_OF_FREE_MEM) {
-	#ifdef DEBUG_0
-	printf("Address out of bounds - ERROR\r\n");
-	#endif /* DEBUG_0 */
+	// get address where size lives (the real start of the pointer)
+	size_t *size_address = (size_t *)((unsigned int)ptr - SIZE_T_BYTES);
+
+    if ((unsigned int)size_address < end_addr || (unsigned int)size_address >= END_OF_FREE_MEM) {
+		#ifdef DEBUG_0
+    		printf("Address out of bounds - ERROR\r\n");
+		#endif /* DEBUG_0 */
 		return RTX_ERR;
     }
 
-	// ????????????????????????????????????????????????????????
-	//get the size of this block to be deleted - THIS IS STILL A QUESTION AS ALLOCATED SIZE NOT STORED IN MEMORY
-    //char* given_address_block_size = (char *)((U32)given_address - SIZE_T_BYTES);
-    //char* pointer = (char*)0x80302a6c;
-    //char value = *pointer;
-	char given_address_block_size = 12;
-
-	//variables
-	struct mem_node *prev_address = NULL;
-	struct mem_node *next_address = NULL;
-
 	//set up node to be inserted into the list of free blocks
-	struct mem_node *deallocated_space = NULL;
-	deallocated_space = (struct mem_node *)(given_address);		// Assign head to start of Free Memory Space
-	deallocated_space->size = given_address_block_size;
+	struct mem_node *deallocated_space = (struct mem_node *)(size_address);
+	deallocated_space->size = *size_address;
 	deallocated_space->next_node = NULL;
 
 	#ifdef DEBUG_0
-	printf("Deallocated location: 0x%x\r\n", given_address);
+		printf("Deallocated location: 0x%x\r\n", size_address);
 	#endif /* DEBUG_0 */
 
+	// Check if head comes after the space being deallocated
+	// This is guaranteed when the first allocated memory block is deallocated
+	if((unsigned int)head > (unsigned int)size_address) {
 
-	// Before traversing the free list, there could be an allocated node right before free list!
-	if ((U32)given_address < (U32)head) {
+		// We first check whether a merge is necessary
+		if((unsigned int)size_address + deallocated_space->size == (unsigned int)head) {
+		    // Merge is necessary
+		    deallocated_space->next_node = head->next_node;
+		    deallocated_space->size += head->size;
+		    head = deallocated_space;
+		} else {
+		    deallocated_space->next_node = head;
+		    head = deallocated_space;
+		}
 
 		#ifdef DEBUG_0
-		printf("Yes it's before head...\r\n");
+			printf("It was the first node, we're done\r\n");
+			printf("head: 0x%x, head_next: 0x%x, head_size: %d\r\n", (unsigned int)head, (unsigned int)head->next_node, head->size);
 		#endif /* DEBUG_0 */
-
-		deallocated_space->next_node = head;
-	    head->size = head->size + deallocated_space->size;
-		head = deallocated_space;
-
-		#ifdef DEBUG_0
-		printf("Relocated head to: 0x%x\r\n", head);
-		printf(" ........................................................................................\r\n");
-		#endif /* DEBUG_0 */
-
 		return RTX_OK;
 	}
 
-	struct mem_node *current_pointer = (struct mem_node *)((unsigned int) head);
+	//variables for traversal
+	struct mem_node *prev_address = head;
+	struct mem_node *current_address = head;
 
 	#ifdef DEBUG_0
-	printf("Starting Current Pointer: 0x%x\r\n", current_pointer);
+		printf("Starting Previous Pointer (also head): 0x%x\r\n", prev_address);
+		printf("Starting Current Pointer (also head): 0x%x\r\n", current_address);
 	#endif /* DEBUG_0 */
 
-	//traverse and find where this allocated block is located...
-    while(current_pointer != NULL)
-    {
-    	//Error condition - if we found node in free list AREA for this address, DANGER - DEALLOCATING FREE SPACE
-    	if (given_address == (U32)current_pointer) {
-
-			#ifdef DEBUG_0
-			printf("Address is a node on free list! - ERROR\r\n");
-			#endif /* DEBUG_0 */
-
-    			return RTX_ERR;
-    	}
-
-    	if (given_address < (U32)(current_pointer) + current_pointer->size) {
-
-			#ifdef DEBUG_0
-    		printf("Address is in the free space! - ERROR\r\n");
-			#endif /* DEBUG_0 */
-
-				return RTX_ERR;
-		}
-
-    	//check location and track the adjacent free space around this allocated node
-    	if ((U32)(current_pointer->next_node) > given_address) {
-
-			#ifdef DEBUG_0
-			printf("Found possible location of node!\r\n");
-			#endif /* DEBUG_0 */
-
-    		prev_address = (struct mem_node *)((unsigned int)current_pointer);
-    		next_address = (struct mem_node *)((unsigned int)current_pointer->next_node);
+	//traverse and find the address of the block next in free memory space
+    while(current_address != NULL) {
+    	if ((unsigned int)current_address > (unsigned int)size_address)
     		break;
+
+    	//Error condition - if we found node in free list AREA for this address, DANGER - DEALLOCATING FREE SPACE
+    	if ((unsigned int)size_address == (unsigned int)current_address) {
+    		#ifdef DEBUG_0
+    			printf("Address is a node on free list! - ERROR\r\n");
+    		#endif /* DEBUG_0 */
+
+    	    return RTX_ERR;
     	}
-    	current_pointer = current_pointer->next_node;
+
+    	if ((unsigned int)size_address < (unsigned int)(current_address) + current_address->size) {
+
+    		#ifdef DEBUG_0
+    	    	printf("Address is in the free space! - ERROR\r\n");
+    		#endif /* DEBUG_0 */
+
+    	    return RTX_ERR;
+    	}
+
+    	prev_address = current_address;
+    	current_address = current_address->next_node;
+		#ifdef DEBUG_0
+    		printf("Previous Pointer: 0x%x\r\n", prev_address);
+			printf("Current Pointer: 0x%x\r\n", current_address);
+		#endif /* DEBUG_0 */
+    }
+
+    // Now we have current_address holding the address of the node after our deallocated
+    // and prev_address has the address of the node before
+
+    // We first check whether a merge is necessary
+    if((unsigned int)size_address + deallocated_space->size == (unsigned int)current_address) {
+		#ifdef DEBUG_0
+    		printf("Merge is necessary\r\n", prev_address);
+		#endif /* DEBUG_0 */
+    	// Merge is necessary
+    	deallocated_space->next_node = current_address->next_node;
+    	deallocated_space->size += current_address->size;
+    	prev_address->next_node = deallocated_space;
+
+    	// Now check merge with previous node
+    	if((unsigned int)prev_address + prev_address->size == (unsigned int)prev_address->next_node) {
+    		prev_address->size += prev_address->next_node->size;
+    		prev_address->next_node = prev_address->next_node->next_node;
+    	}
+    } else {
+    	deallocated_space->next_node = current_address;
+    	prev_address->next_node = deallocated_space;
     }
 
 	#ifdef DEBUG_0
-	printf("Previous Address: 0x%x\r\n", prev_address);
-	printf("Next Address: 0x%x\r\n", next_address);
+		printf("Head Address: 0x%x\r\n", head);
+		printf("Head Next: 0x%x\r\n", head->next_node);
+		printf("Head Size: %d\r\n", head->size);
 	#endif /* DEBUG_0 */
-
-    //if we did not set the previous and next free space, this means we could not find the node to be deallocated. return null
-    if (!prev_address && !next_address) {
-		#ifdef DEBUG_0
-		printf("No address located on memory - ERROR\r\n");
-		#endif
-    	return RTX_ERR;
-    }
-
-    //insert the deallocated block node in list
-    prev_address->next_node = (struct mem_node *)((unsigned int)deallocated_space);
-    deallocated_space->next_node = (struct mem_node *)((unsigned int)next_address);
-
-    //first check if both spaces around is empty
-
-	if (((U32)prev_address + (U32)prev_address->size == (U32)given_address) &&
-			((U32)given_address + (U32)given_address_block_size == (U32)next_address)) {
-
-		#ifdef DEBUG_0
-		printf("Left and Right of node are free\r\n");
-		#endif /* DEBUG_0 */
-
-		prev_address->next_node = next_address->next_node;
-		prev_address->size = prev_address->size + next_address->size + deallocated_space->size;
-		deallocated_space->next_node = NULL;
-		next_address->next_node = NULL;
-
-		return RTX_OK;
-
-	} else {
-		//check if prev_address is free
-		if ((U32)prev_address + (U32)prev_address->size  == (U32)given_address) {
-			#ifdef DEBUG_0
-			printf("Left side is free!\r\n");
-			#endif /* DEBUG_0 */
-
-			prev_address->size = prev_address->size + deallocated_space->size;
-			prev_address->next_node = next_address;
-			deallocated_space->next_node = NULL;
-
-			return RTX_OK;
-		}
-
-		//check if next_address is free
-		if ((U32)given_address + (U32)given_address_block_size == (U32)next_address) {
-
-			#ifdef DEBUG_0
-			printf("Right side is free!\r\n");
-			#endif /* DEBUG_0 */
-
-			next_address->size = next_address->size + deallocated_space->size;
-			prev_address->next_node = next_address;
-			deallocated_space->next_node = NULL;
-
-			return RTX_OK;
-		}
-	}
 
 	#ifdef DEBUG_0
 	printf(" ........................................................................................\r\n");
 	#endif /* DEBUG_0 */
 
-
-    return RTX_ERR;
+    return RTX_OK;
 }
 
 
 // EXTRACT_FRAGMENT
 int k_mem_count_extfrag(size_t size) {
-#ifdef DEBUG_0
-    printf("k_mem_extfrag: size = %d\r\n", size);
-#endif /* DEBUG_0 */
+	#ifdef DEBUG_0
+    	printf("k_mem_extfrag: size = %d\r\n", size);
+	#endif /* DEBUG_0 */
     struct mem_node *start = head;
     int frags = 0;
     
     while(start != NULL) {
-	if(start->size < size) {
-		frags++;
-	}
-	start = start->next_node;    
+    	if(start->size < size) {
+    		frags++;
+    	}
+    	start = start->next_node;
     }
+
+	#ifdef DEBUG_0
+    	printf("k_mem_extfrag: frags = %d\r\n", frags);
+	#endif /* DEBUG_0 */
     return frags;
 }
 
