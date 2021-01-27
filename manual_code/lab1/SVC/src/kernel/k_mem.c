@@ -278,7 +278,7 @@ int k_mem_dealloc(void *ptr) {
     	    return RTX_ERR;
     	}
 
-    	if ((unsigned int)size_address < (unsigned int)(current_address) + current_address->size) {
+    	if ((unsigned int)size_address < (unsigned int)(prev_address) + prev_address->size) {
 
     		#ifdef DEBUG_0
     	    	printf("Address is in the free space! - ERROR\r\n");
