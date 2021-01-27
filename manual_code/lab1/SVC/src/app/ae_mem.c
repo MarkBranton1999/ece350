@@ -37,7 +37,7 @@ int test_mem(void) {
 		result |= BIT(0);
 	}
 
-	//CASE 2: ALLOC AND DE_ALLOC SAME NUMBER OF TIMES
+	//CASE 2: ALLOC AND DE_ALLOC SAME NUMBER OF TIMES - in the end, it should be back to how it orignally was
 	p[0] = mem_alloc(25);
 	p[1] = mem_alloc(25);
 	mem_dealloc(p[1]);
@@ -65,15 +65,13 @@ int test_mem(void) {
 	}
 	mem_dealloc(p[0]);
 
-	//CASE 4: REUSING NEWLY FREE REGION TO ASSIGN A BLOCK
-	printf("----------------------------------------\r\n");
+	//CASE 4: REUSING NEWLY FREE REGION TO ASSIGN A BIG BLOCK - first fit should assign 2nd free node available
 	p[0] = mem_alloc(8);
 	p[1] = mem_alloc(20);
 	mem_dealloc(p[0]);
 	p[2] = mem_alloc(20);
 
 	n = mem_count_extfrag(1070585250);
-	printf("CASE 4: %d\r\n", n);
 	if (n == 2) {
 		result |= BIT(3);
 	}
