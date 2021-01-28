@@ -65,29 +65,25 @@ int test_mem(void) {
 	}
 	mem_dealloc(p[0]);
 
-	//CASE 4: REUSING NEWLY FREE REGION TO ASSIGN A BIG BLOCK - first fit should assign 2nd free node available
-	p[0] = mem_alloc(8);
-	p[1] = mem_alloc(20);
-	mem_dealloc(p[0]);
-	p[2] = mem_alloc(20);
-
-	n = mem_count_extfrag(1070585250);
-	if (n == 2) {
-		result |= BIT(3);
-	}
-	mem_dealloc(p[1]);
-	mem_dealloc(p[2]);
-
-	//CASE 5: DEALLOCATING AN ADDRESS IN THE MIDDLE OF FREE REGION GIVES ERROR
+	//CASE 4: DEALLOCATING AN ADDRESS IN THE MIDDLE OF FREE REGION GIVES ERROR
 	p[0] = mem_alloc(25);
 	p[1] = mem_alloc(25);
 	mem_dealloc(p[0]);
 	mem_dealloc(p[1]);
 	mem_dealloc(p[1]);
 
+	if (mem_dealloc(p[1]) == RTX_ERR) {
+		result |= BIT(3);
+	}
+	
+	//CASE 5: allocate the largest size possible in memory
+	p[0] = mem_alloc(1070585236);
+	mem_dealloc(p[0]);
+	
 	if (n == 1) {
 		result |= BIT(4);
 	}
+
 
 	return result;
 }
