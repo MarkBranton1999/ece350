@@ -26,80 +26,50 @@
  ****************************************************************************
  */
 
-
 /**************************************************************************//**
- * @file:   	main_svc.c
- * @brief:  	main routine to start up the RTX and two initial tasks
- * @version     V1.2021.01.lab2
+ * @file        ae_mem.c
+ * @brief       memory lab auto-tester
+ *
+ * @version     V1.2021.01
  * @authors     Yiqing Huang
  * @date        2021 JAN
- * @note 		standard C library is not allowed in the final kernel code.
- *       		A tiny printf function for embedded application development
- *       		taken from http://www.sparetimelabs.com/tinyprintf/tinyprintf.php
- *       		is configured to use UART0 to output when DEBUG_0 is defined.
- *       		The init_printf(NULL, putc) MUST be called to initialize
- *       		the printf function.
+ *
  *****************************************************************************/
 
-
-#include "ae.h"
-#include "system_a9.h"
+#include "rtx.h"
 #include "Serial.h"
 #include "printf.h"
-#include "k_inc.h"
-#include "k_rtx.h"
 
+int test_mem(void) {
+    void *p[4];
+    int n;
 
-extern void __ch_MODE (U32 mode);
-extern void __atomic_on(void);
-extern void __atomic_off(void);
+    U32 result = 0;
 
+    p[0] = mem_alloc(8);
 
-void task_null (void)
-{
-    while (1) {
-#ifdef DEBUG_0
-        for ( int i = 0; i < 5; i++ ){
-            printf("==============Task NULL===============\r\n");
-        }
-#endif
-        k_tsk_yield();
-    }
-}
-
-int main() 
-{    
-    static RTX_SYS_INFO  sys_info;
-    static RTX_TASK_INFO task_info[2];
-    char mode = 0;
-
-    // CMSIS system initialization
-    SystemInit();
-
-    __atomic_on();
-    SER_Init();  				// uart1 uses polling for output
-    init_printf(NULL, putc);	// printf uses uart1 for output
-    __atomic_off();
-
-    mode = __get_mode();
-    printf("mode = 0x%x\r\n", mode);
-
-    // System and Task set up by auto testing software
-    if (ae_init(&sys_info, task_info, 2) != RTX_OK) {
-    	printf("RTX INIT FAILED\r\n");
-    	return RTX_ERR;
+    if (p[0] != NULL) {
+        result |= BIT(0);
     }
 
-    // start the RTX and built-in tasks
-    if (mode == MODE_SVC) {
-        gp_current_task = NULL;
-        k_rtx_init(task_info, 2);
+    p[1] = mem_alloc(8);
+
+    if (p[1] != NULL && p[1] != p[0]) {
+        result |= BIT(1);
     }
 
-    task_null();
+    mem_dealloc(p[0]);
+    n = mem_count_extfrag(128);
+    if (n == 1) {
+        result |= BIT(2);
+    }
 
-    // We should never reach here!!!
-    return RTX_ERR;  
+    mem_dealloc(p[1]);
+    n = mem_count_extfrag(128);
+    if (n == 0) {
+        result |= BIT(3);
+    }
+    return result;
 }
 /*
  *===========================================================================

@@ -26,81 +26,39 @@
  ****************************************************************************
  */
 
-
 /**************************************************************************//**
- * @file:   	main_svc.c
- * @brief:  	main routine to start up the RTX and two initial tasks
- * @version     V1.2021.01.lab2
+ * @file        system_a9.h
+ * @brief       Coretx-A9 Generic CMSIS System Initialization
+ * @version     V1.2021.01
  * @authors     Yiqing Huang
  * @date        2021 JAN
- * @note 		standard C library is not allowed in the final kernel code.
- *       		A tiny printf function for embedded application development
- *       		taken from http://www.sparetimelabs.com/tinyprintf/tinyprintf.php
- *       		is configured to use UART0 to output when DEBUG_0 is defined.
- *       		The init_printf(NULL, putc) MUST be called to initialize
- *       		the printf function.
+ * @note
+ * @details
+ *
  *****************************************************************************/
+#ifndef _SYSTEM_A9_H
+#define _SYSTEM_A9_H
 
+#include "device_a9.h"
+#include "k_HAL_CA.h"
+#include "common.h"
 
-#include "ae.h"
-#include "system_a9.h"
-#include "Serial.h"
-#include "printf.h"
-#include "k_inc.h"
-#include "k_rtx.h"
+extern U32 g_p_stacks[MAX_TASKS][PROC_STACK_SIZE >> 2] __attribute__((aligned(8)));
 
-
-extern void __ch_MODE (U32 mode);
-extern void __atomic_on(void);
-extern void __atomic_off(void);
-
-
-void task_null (void)
-{
-    while (1) {
-#ifdef DEBUG_0
-        for ( int i = 0; i < 5; i++ ){
-            printf("==============Task NULL===============\r\n");
-        }
+/*
+ *===========================================================================
+ *                            FUNCTION PROTOTYPES
+ *===========================================================================
+ */
+#ifdef __cplusplus
+extern "C" {
 #endif
-        k_tsk_yield();
-    }
-}
 
-int main() 
-{    
-    static RTX_SYS_INFO  sys_info;
-    static RTX_TASK_INFO task_info[2];
-    char mode = 0;
 
-    // CMSIS system initialization
-    SystemInit();
+extern void StackInit (void);
+extern void SystemInit (void);
 
-    __atomic_on();
-    SER_Init();  				// uart1 uses polling for output
-    init_printf(NULL, putc);	// printf uses uart1 for output
-    __atomic_off();
-
-    mode = __get_mode();
-    printf("mode = 0x%x\r\n", mode);
-
-    // System and Task set up by auto testing software
-    if (ae_init(&sys_info, task_info, 2) != RTX_OK) {
-    	printf("RTX INIT FAILED\r\n");
-    	return RTX_ERR;
-    }
-
-    // start the RTX and built-in tasks
-    if (mode == MODE_SVC) {
-        gp_current_task = NULL;
-        k_rtx_init(task_info, 2);
-    }
-
-    task_null();
-
-    // We should never reach here!!!
-    return RTX_ERR;  
-}
+#endif /* _SYSTEM_A9_H */
 /*
  *===========================================================================
  *                             END OF FILE

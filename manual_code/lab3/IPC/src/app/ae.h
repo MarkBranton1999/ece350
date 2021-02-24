@@ -26,83 +26,53 @@
  ****************************************************************************
  */
 
+#ifndef AE_
+#define AE_
 
-/**************************************************************************//**
- * @file:   	main_svc.c
- * @brief:  	main routine to start up the RTX and two initial tasks
- * @version     V1.2021.01.lab2
- * @authors     Yiqing Huang
- * @date        2021 JAN
- * @note 		standard C library is not allowed in the final kernel code.
- *       		A tiny printf function for embedded application development
- *       		taken from http://www.sparetimelabs.com/tinyprintf/tinyprintf.php
- *       		is configured to use UART0 to output when DEBUG_0 is defined.
- *       		The init_printf(NULL, putc) MUST be called to initialize
- *       		the printf function.
- *****************************************************************************/
-
-
-#include "ae.h"
-#include "system_a9.h"
 #include "Serial.h"
 #include "printf.h"
-#include "k_inc.h"
-#include "k_rtx.h"
+#include "rtx.h"
+#include "ae_priv_tasks.h"
+#include "ae_usr_tasks.h"
 
+/*
+ *===========================================================================
+ *                            FUNCTION PROTOTYPES
+ *===========================================================================
+ */
 
-extern void __ch_MODE (U32 mode);
-extern void __atomic_on(void);
-extern void __atomic_off(void);
+/**************************************************************************//**
+ * @file        ae.h
+ * @brief       Automated Evaluation (AE) Framework Header File
+ *
+ * @version     V1.2021.01
+ * @authors     Yiqing Huang
+ * @date        2021 JAN
+ *
+ * @attention
+ * @note
+ * @details
+ *
+ *****************************************************************************/
 
+/*
+ *===========================================================================
+ *                            FUNCTION PROTOTYPES
+ *===========================================================================
+ */
 
-void task_null (void)
-{
-    while (1) {
-#ifdef DEBUG_0
-        for ( int i = 0; i < 5; i++ ){
-            printf("==============Task NULL===============\r\n");
-        }
-#endif
-        k_tsk_yield();
-    }
-}
+int  ae_init          (RTX_SYS_INFO *sys_info, \
+                       RTX_TASK_INFO *task_info, int num_tasks);
+int  ae_set_sys_info  (RTX_SYS_INFO *sys_info);
+void ae_set_task_info (RTX_TASK_INFO *tasks, int num_tasks);
+int  ae_start(void);
 
-int main() 
-{    
-    static RTX_SYS_INFO  sys_info;
-    static RTX_TASK_INFO task_info[2];
-    char mode = 0;
+int  test_mem(void);
 
-    // CMSIS system initialization
-    SystemInit();
-
-    __atomic_on();
-    SER_Init();  				// uart1 uses polling for output
-    init_printf(NULL, putc);	// printf uses uart1 for output
-    __atomic_off();
-
-    mode = __get_mode();
-    printf("mode = 0x%x\r\n", mode);
-
-    // System and Task set up by auto testing software
-    if (ae_init(&sys_info, task_info, 2) != RTX_OK) {
-    	printf("RTX INIT FAILED\r\n");
-    	return RTX_ERR;
-    }
-
-    // start the RTX and built-in tasks
-    if (mode == MODE_SVC) {
-        gp_current_task = NULL;
-        k_rtx_init(task_info, 2);
-    }
-
-    task_null();
-
-    // We should never reach here!!!
-    return RTX_ERR;  
-}
+#endif // ! AE_
 /*
  *===========================================================================
  *                             END OF FILE
  *===========================================================================
  */
+

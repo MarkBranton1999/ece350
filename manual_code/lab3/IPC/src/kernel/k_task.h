@@ -26,83 +26,60 @@
  ****************************************************************************
  */
 
-
 /**************************************************************************//**
- * @file:   	main_svc.c
- * @brief:  	main routine to start up the RTX and two initial tasks
- * @version     V1.2021.01.lab2
+ * @file        k_task.h
+ * @brief       Task Management Header File
+ *
+ * @version     V1.2021.01
  * @authors     Yiqing Huang
  * @date        2021 JAN
- * @note 		standard C library is not allowed in the final kernel code.
- *       		A tiny printf function for embedded application development
- *       		taken from http://www.sparetimelabs.com/tinyprintf/tinyprintf.php
- *       		is configured to use UART0 to output when DEBUG_0 is defined.
- *       		The init_printf(NULL, putc) MUST be called to initialize
- *       		the printf function.
+ *
+ * @details
+ * @note        Starter code assumes there are only two privileged tasks
+ *
  *****************************************************************************/
 
+#ifndef K_TASK_H_
+#define K_TASK_H_
 
-#include "ae.h"
-#include "system_a9.h"
-#include "Serial.h"
-#include "printf.h"
 #include "k_inc.h"
-#include "k_rtx.h"
+#include "k_HAL_CA.h"
 
+/*
+ *==========================================================================
+ *                            GLOBAL VARIABLES
+ *==========================================================================
+ */
 
-extern void __ch_MODE (U32 mode);
-extern void __atomic_on(void);
-extern void __atomic_off(void);
+extern TCB *gp_current_task;
 
-
-void task_null (void)
-{
-    while (1) {
-#ifdef DEBUG_0
-        for ( int i = 0; i < 5; i++ ){
-            printf("==============Task NULL===============\r\n");
-        }
-#endif
-        k_tsk_yield();
-    }
-}
-
-int main() 
-{    
-    static RTX_SYS_INFO  sys_info;
-    static RTX_TASK_INFO task_info[2];
-    char mode = 0;
-
-    // CMSIS system initialization
-    SystemInit();
-
-    __atomic_on();
-    SER_Init();  				// uart1 uses polling for output
-    init_printf(NULL, putc);	// printf uses uart1 for output
-    __atomic_off();
-
-    mode = __get_mode();
-    printf("mode = 0x%x\r\n", mode);
-
-    // System and Task set up by auto testing software
-    if (ae_init(&sys_info, task_info, 2) != RTX_OK) {
-    	printf("RTX INIT FAILED\r\n");
-    	return RTX_ERR;
-    }
-
-    // start the RTX and built-in tasks
-    if (mode == MODE_SVC) {
-        gp_current_task = NULL;
-        k_rtx_init(task_info, 2);
-    }
-
-    task_null();
-
-    // We should never reach here!!!
-    return RTX_ERR;  
-}
 /*
  *===========================================================================
- *                             END OF FILE
+ *                            FUNCTION PROTOTYPES
  *===========================================================================
  */
+
+extern void task_null	(void);
+
+
+// Implemented by Starter Code
+
+int  k_tsk_init         (RTX_TASK_INFO *task_info, int num_tasks);
+                                 /* initialize all tasks in the system */
+int  k_tsk_create_new   (RTX_TASK_INFO *p_taskinfo, TCB *p_tcb, task_t tid);
+                                 /* create a new task with initial context sitting on a dummy stack frame */
+TCB *scheduler          (void);  /* return the TCB of the next ready to run task */
+void k_tsk_switch       (TCB *); /* kernel thread context switch, two stacks */
+int  k_tsk_run_new      (void);  /* kernel runs a new thread  */
+int  k_tsk_yield        (void);  /* kernel tsk_yield function */
+
+// Not implemented, to be done by students
+int  k_tsk_create       (task_t *task, void (*task_entry)(void), U8 prio, U16 stack_size);
+void k_tsk_exit         (void);
+int  k_tsk_set_prio     (task_t task_id, U8 prio);
+int  k_tsk_get          (task_t task_id, RTX_TASK_INFO *buffer);
+int  k_tsk_create_rt    (task_t *tid, TASK_RT *task, RTX_MSG_HDR *msg_hdr, U32 num_msgs);
+void k_tsk_done_rt      (void);
+void k_tsk_suspend      (struct timeval_rt *tv);
+
+#endif // ! K_TASK_H_

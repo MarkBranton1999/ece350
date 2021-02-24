@@ -26,81 +26,40 @@
  ****************************************************************************
  */
 
-
 /**************************************************************************//**
- * @file:   	main_svc.c
- * @brief:  	main routine to start up the RTX and two initial tasks
- * @version     V1.2021.01.lab2
+ * @file        priv_tasks.h
+ * @brief       Two privileged tasks header file
+ *
+ * @version     V1.2021.01
  * @authors     Yiqing Huang
  * @date        2021 JAN
- * @note 		standard C library is not allowed in the final kernel code.
- *       		A tiny printf function for embedded application development
- *       		taken from http://www.sparetimelabs.com/tinyprintf/tinyprintf.php
- *       		is configured to use UART0 to output when DEBUG_0 is defined.
- *       		The init_printf(NULL, putc) MUST be called to initialize
- *       		the printf function.
+ *
  *****************************************************************************/
 
+#ifndef PRIV_TASKS_H_
+#define PRIV_TASKS_H_
 
-#include "ae.h"
-#include "system_a9.h"
-#include "Serial.h"
-#include "printf.h"
-#include "k_inc.h"
 #include "k_rtx.h"
+#include "rtx.h"
 
+/*
+ *===========================================================================
+ *                             MACROS
+ *===========================================================================
+ */
+#define DELAY 5000000
 
-extern void __ch_MODE (U32 mode);
-extern void __atomic_on(void);
-extern void __atomic_off(void);
+/*
+ *===========================================================================
+ *                            FUNCTION PROTOTYPES
+ *===========================================================================
+ */
+extern void task1(void);
 
+void priv_task1     (void);
+void priv_task2     (void);
 
-void task_null (void)
-{
-    while (1) {
-#ifdef DEBUG_0
-        for ( int i = 0; i < 5; i++ ){
-            printf("==============Task NULL===============\r\n");
-        }
-#endif
-        k_tsk_yield();
-    }
-}
-
-int main() 
-{    
-    static RTX_SYS_INFO  sys_info;
-    static RTX_TASK_INFO task_info[2];
-    char mode = 0;
-
-    // CMSIS system initialization
-    SystemInit();
-
-    __atomic_on();
-    SER_Init();  				// uart1 uses polling for output
-    init_printf(NULL, putc);	// printf uses uart1 for output
-    __atomic_off();
-
-    mode = __get_mode();
-    printf("mode = 0x%x\r\n", mode);
-
-    // System and Task set up by auto testing software
-    if (ae_init(&sys_info, task_info, 2) != RTX_OK) {
-    	printf("RTX INIT FAILED\r\n");
-    	return RTX_ERR;
-    }
-
-    // start the RTX and built-in tasks
-    if (mode == MODE_SVC) {
-        gp_current_task = NULL;
-        k_rtx_init(task_info, 2);
-    }
-
-    task_null();
-
-    // We should never reach here!!!
-    return RTX_ERR;  
-}
+#endif // ! PRIV_TASKS_H_
 /*
  *===========================================================================
  *                             END OF FILE
